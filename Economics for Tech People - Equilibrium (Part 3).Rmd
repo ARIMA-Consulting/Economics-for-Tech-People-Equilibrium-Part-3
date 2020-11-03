@@ -1,0 +1,205 @@
+---
+title: "Economics for Tech People - Equilibrium (Part 3)"
+author: "Tyler Harris"
+date: "10/27/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load Libraries
+
+# If you do not have readxl or tidyverse installed, uncomment the following lines
+# install.packages("readxl")
+# install.packages("tidyverse")
+
+require(readxl)
+require(tidyverse)
+```
+
+```{r}
+# Import Data
+Supply_Data <- read_excel("Supply_Data.xlsx")
+Demand_Data <- read_excel("Demand_Data.xlsx")
+
+# Check data import
+head(Supply_Data)
+head(Demand_Data)
+```
+
+```{r}
+# Get caught up from parts 1 and 2
+# Rebuild the market supply and demand data frames with elasticity zones
+# Please refer to the first two articles for details
+# I am assuming that you are caught up on those to follow along
+# This will be a bunch of copy/paste without the extra checks and graphs
+```
+
+```{r}
+# Demand first
+
+# Wrangle the data into a ggplot friendly structure
+Wrangled_Data <- data.frame(Price = Demand_Data$Price, stack(Demand_Data[2:11]))
+names(Wrangled_Data)[2] <- "Quantity"
+names(Wrangled_Data)[3] <- "Qd_num"
+
+# Create market demand
+Market_Demand <- data.frame(Price = Demand_Data$Price, Market_Demand = rowSums(Demand_Data[2:11]))
+
+# Add Elasticity zones
+# 10-6.5 zone 1
+# 6-4 zone 2
+# 3.5-2 zone 3
+# 1.5-0 zone 4
+Market_Demand$Elasticity_Zone <- as.character(c(1,1,1,1,1,1,1,1,2,2,2,2,2,3,3,3,3,4,4,4,4))
+```
+
+```{r}
+# Supply second
+
+# Wrangle the data into a ggplot friendly structure
+Wrangled_Supply_Data <- data.frame(Price = Supply_Data$Price, stack(Supply_Data[2:11]))
+names(Wrangled_Supply_Data)[2] <- "Quantity"
+names(Wrangled_Supply_Data)[3] <- "Qs_num"
+
+# Create market supply
+Market_Supply <- data.frame(Price = Supply_Data$Price, Market_Supply = rowSums(Supply_Data[2:11]))
+
+# Add Elasticity zones
+# 10-5.5 zone 1
+# 5-4 zone 2
+# 3.5-0 zone 3
+Market_Supply$Elasticity_Zone <- as.character(c(1,1,1,1,1,1,1,1,1,1,2,2,2,3,3,3,3,3,3,3,3))
+```
+
+```{r}
+# Plot the equilibrium
+ggplot() +
+  geom_line(data = Market_Supply, aes(x = Market_Supply, y = Price), color = "darkred", size = 1) +
+  geom_line(data = Market_Demand, aes(x = Market_Demand, y = Price), color = "steelblue", size = 1) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+  xlim(0, 1150) +
+  ggtitle("Market Equlibrium") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  xlab("Quantity") +
+  ylab("Price")
+```
+
+```{r}
+# Join data together
+Merged_data <- inner_join(Market_Demand, Market_Supply, by = "Price")
+head(Merged_data)
+```
+
+```{r}
+# Find difference between supply and demand
+Merged_data$Diff <- Merged_data$Market_Supply - Merged_data$Market_Demand
+Merged_data
+```
+
+```{r}
+# Find row of minimum difference
+min_diff_1 <- Merged_data[which.min(abs(Merged_data$Diff)),]
+min_diff_1
+```
+
+```{r}
+# Add lines to previous graph based on the min_diff_1 numbers
+
+# Plot the equilibrium
+ggplot() +
+  geom_line(data = Market_Supply, aes(x = Market_Supply, y = Price), color = "darkred", size = 1) +
+  geom_line(data = Market_Demand, aes(x = Market_Demand, y = Price), color = "steelblue", size = 1) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+  xlim(0, 300) + ### ZOOM IN A BIT ###
+  ggtitle("Market Equlibrium") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  xlab("Quantity") +
+  ylab("Price") +
+  ### NEW LINES ###
+  geom_hline(yintercept = min_diff_1$Price) +
+  geom_vline(xintercept = min_diff_1$Market_Demand) + 
+  geom_vline(xintercept = min_diff_1$Market_Supply)
+```
+
+```{r}
+# Calculate total revenue
+total_revenue <- min_diff_1$Price * mean(min_diff_1$Market_Demand, min_diff_1$Market_Supply)
+total_revenue
+```
+
+```{r}
+# Make Linear models to fill in the blanks
+
+# We can see that the Market Demand is in Elasticity Zone 2 and the Market Supply is in Elasticity Zone 1. We can make simple linear models to then predict prices down to the cent in the Elasticity Zone where the intersection happens
+```
+
+```{r}
+# Create Supply linear model
+
+# Filter Data
+supply_lm_data <- Market_Supply %>%
+  filter(Elasticity_Zone == 1)
+
+# Create linear model
+Supply_Zone_1_lm <- lm(Market_Supply ~ Price, data = supply_lm_data)
+
+# Create and print summary
+summary(Supply_Zone_1_lm)
+```
+
+```{r}
+# Create Demand linear model
+
+# Filter Data
+demand_lm_data <- Market_Demand %>%
+  filter(Elasticity_Zone == 2)
+
+# Create linear model
+Demand_Zone_2_lm <- lm(Market_Demand ~ Price, data = demand_lm_data)
+
+# Create and print summary
+summary(Demand_Zone_2_lm)
+```
+
+```{r}
+# Use linear models to fill in data
+
+# new price data
+new_price_data <- data.frame(Price = seq(5.5, 6.5, by = 0.01))
+```
+
+```{r}
+# Use coefficient and intercept data to fill in the blanks
+
+# Supply first
+new_price_data$supply <- round(Supply_Zone_1_lm$coefficients[1] + (Supply_Zone_1_lm$coefficients[2] * new_price_data$Price), 0)
+
+# Demand next
+new_price_data$demand <- round(Demand_Zone_2_lm$coefficients[1] + (Demand_Zone_2_lm$coefficients[2] * new_price_data$Price), 0)
+
+# Find difference between supply and demand
+new_price_data$Diff <- new_price_data$demand - new_price_data$supply
+
+# Check the data
+head(new_price_data)
+```
+
+```{r}
+# Find row of minimum difference
+min_diff_2 <- new_price_data[which.min(abs(new_price_data$Diff)),]
+min_diff_2
+```
+
+
+
+
+
+
+
+
